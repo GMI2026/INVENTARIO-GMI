@@ -232,6 +232,9 @@ td.num{font-variant-numeric:tabular-nums;font-weight:600}
 .lbl.used{background:repeating-linear-gradient(45deg,transparent 0 4px,#d9e0ea 4px 5px)}
 .lbl svg{flex:0 0 auto;display:block}
 .lbl .t{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.lbl.v{flex-direction:column;justify-content:flex-start}
+.lbl.v .t{align-items:center;text-align:center;flex:1;justify-content:center}
+.lbl.v .t span{max-width:100%}
 .lbl .t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lbl .t .s{color:#5a5a5a}
 .lbl .t .d{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
@@ -825,19 +828,31 @@ async function toggleProj(code){
 
 /* ===== LABELS ===== */
 const FMTS={
-  corte21:{name:"Papel carta para recortar · 21 por hoja (6.5 × 3.6 cm)",cols:3,rows:7,w:65,h:36,left:10.45,top:13.7,dx:65,dy:36,cut:true},
-  avery5160:{name:"Hoja adhesiva Avery 5160 · 30 por hoja (6.7 × 2.5 cm)",cols:3,rows:10,w:66.7,h:25.4,left:4.8,top:12.7,dx:69.85,dy:25.4,cut:false},
-  grande8:{name:"Grande para equipos · 8 por hoja (10 × 6.5 cm)",cols:2,rows:4,w:100,h:65,left:7.95,top:9.7,dx:100,dy:65,cut:true}
+  corte21:{g:"Chica",name:"Chica · papel para recortar · 21 por hoja (6.5 × 3.6 cm)",cols:3,rows:7,w:65,h:36,left:10.45,top:13.7,dx:65,dy:36,cut:true},
+  avery5160:{g:"Chica",name:"Chica · adhesiva Avery 5160 · 30 por hoja (6.7 × 2.5 cm)",cols:3,rows:10,w:66.7,h:25.4,left:4.8,top:12.7,dx:69.85,dy:25.4,cut:false},
+  grande8:{g:"Chica",name:"Chica para equipos · 8 por hoja (10 × 6.5 cm)",cols:2,rows:4,w:100,h:65,left:7.95,top:9.7,dx:100,dy:65,cut:true},
+  mediana4:{g:"Mediana",name:"Mediana · 1/4 de hoja carta · 4 por hoja (10 × 13.2 cm)",cols:2,rows:2,w:99.95,h:131.7,left:8,top:8,dx:99.95,dy:131.7,cut:true},
+  grande2:{g:"Grande",name:"Grande · 1/2 hoja carta · 2 por hoja (20 × 13.2 cm)",cols:1,rows:2,w:199.9,h:131.7,left:8,top:8,dx:199.9,dy:131.7,cut:true}
 };
 const MM=100/215.9,PT=0.3528*MM;
 let lMode="reg",lSel=new Set();
-for(const k in FMTS)$("lFmt").add(new Option(FMTS[k].name,k));
+{const gs={};for(const k in FMTS){const g=FMTS[k].g;if(!gs[g]){gs[g]=document.createElement("optgroup");gs[g].label=g==="Chica"?"Chica (como las actuales)":g==="Mediana"?"Mediana (1/4 de hoja carta)":"Grande (1/2 hoja carta)";$("lFmt").appendChild(gs[g]);}gs[g].appendChild(new Option(FMTS[k].name,k));}}
 $("lFmt").value=ls.get("inv_fmt","corte21");if(!$("lFmt").value)$("lFmt").value="corte21";
 const printed=()=>{try{return new Set(JSON.parse(ls.get("inv_printed","[]")))}catch{return new Set()}};
 const markPrinted=codes=>{const s=printed();codes.forEach(c=>s.add(c));ls.set("inv_printed",JSON.stringify([...s].slice(-5000)));};
 const head=()=>{const p=curProj();return "GMI · "+(p?p.nombre:proj);};
 function qrFor(code){if(typeof qrcode!=="function")return null;const q=qrcode(0,"M");q.addData(APP_URL+"#"+code);q.make();return q;}
-function geom(f){const pad=f.h*.09,q=f.h-2*pad,tx=pad+q+pad*.8,tw=f.w-tx-pad,cs=Math.min(f.h*.42,tw/(11*.62*.3528));return{pad,q,tx,tw,cs,hs:cs*.5,ds:cs*.66,ss:cs*.55,maxD:f.h<50?2:3};}
+const EM=.3528*1.3; // mm per pt of line height
+function geom(f){
+  if(f.w<f.h){ // vertical: QR arriba, texto abajo (mediana)
+    const pad=f.w*.07,tw=f.w-2*pad,textH=f.h*.3,q=Math.min(tw,f.h-3*pad-textH);
+    const cs=Math.min(tw/(11*.62*.3528),textH/(3.3*EM));
+    return{v:true,pad,q,tw,textH,cs,hs:cs*.5,ds:cs*.62,ss:cs*.55,maxD:2};
+  }
+  const pad=f.h*.09,wide=f.h>100,q=wide?f.h*.62:f.h-2*pad,tx=pad+q+pad*.8,tw=f.w-tx-pad,maxD=f.h<50?2:3;
+  const cs=Math.min(f.h*.42,tw/(11*.62*.3528),(f.h-2*pad)/((2.05+.66*maxD)*EM));
+  return{v:false,pad,q,tx,tw,cs,hs:cs*.5,ds:cs*.66,ss:cs*.55,maxD};
+}
 function slotPos(f,s){const per=f.cols*f.rows,p=s%per;return{page:Math.floor(s/per),x:f.left+(p%f.cols)*f.dx,y:f.top+Math.floor(p/f.cols)*f.dy};}
 function startOff(f){return Math.min(f.cols*f.rows-1,Math.max(0,(parseInt($("lStart").value,10)||1)-1));}
 function blankRange(){return{cat:$("bCat").value,from:Math.max(1,parseInt($("bFrom").value,10)||1),n:Math.min(300,Math.max(1,parseInt($("bQty").value,10)||1))};}
@@ -869,7 +884,7 @@ function renderLabels(){
   for(let s=0;s<per;s++){
     const p=slotPos(f,s),st=`left:${p.x/215.9*100}%;top:${p.y/279.4*100}%;width:${f.w/215.9*100}%;height:${f.h/279.4*100}%;`,lab=s>=off?labs[s-off]:null;
     if(!lab){html+=`<div class="lbl slot${s<off?" used":""}" style="${st}"></div>`;continue;}
-    html+=`<div class="lbl${f.cut?" cut":""}" style="${st}padding:0 ${g.pad*MM}cqw;gap:${g.pad*.8*MM}cqw">${qrSvg(lab.codigo,g.q)}<div class="t" style="width:${g.tw*MM}cqw">
+    html+=`<div class="lbl${f.cut?" cut":""}${g.v?" v":""}" style="${st}padding:${g.v?g.pad*MM+"cqw":"0 "+g.pad*MM+"cqw"};gap:${g.pad*(g.v?.6:.8)*MM}cqw">${qrSvg(lab.codigo,g.q)}<div class="t" style="width:${g.tw*MM}cqw">
       <span class="s" style="font-size:${g.hs*PT}cqw">${esc(H)}</span><span style="font-size:${g.cs*PT}cqw;font-weight:700">${esc(lab.codigo)}</span>
       ${lab.desc?`<span class="d" style="font-size:${g.ds*PT}cqw;-webkit-line-clamp:${g.maxD}">${esc(lab.desc)}</span>`:""}<span class="s" style="font-size:${g.ss*PT}cqw">${esc(lab.sub)}</span></div></div>`;
   }
@@ -900,15 +915,18 @@ function buildPdf(){
   labs.forEach((lab,k)=>{
     const p=slotPos(f,k+off);while(p.page>page){doc.addPage("letter","portrait");page++;}
     if(f.cut){doc.setLineDashPattern([1.2,1.2],0);doc.setDrawColor(170);doc.setLineWidth(.2);doc.rect(p.x,p.y,f.w,f.h,"S");doc.setLineDashPattern([],0);}
-    const q=qrFor(lab.codigo),n=q.getModuleCount(),cell=g.q/n,qx=p.x+g.pad,qy=p.y+g.pad;doc.setFillColor(0,0,0);
+    const q=qrFor(lab.codigo),n=q.getModuleCount(),cell=g.q/n,qx=g.v?p.x+(f.w-g.q)/2:p.x+g.pad,qy=g.v?p.y+g.pad:p.y+(f.h-g.q)/2;doc.setFillColor(0,0,0);
     for(let r=0;r<n;r++){let c=0;while(c<n){if(q.isDark(r,c)){const s=c;while(c<n&&q.isDark(r,c))c++;doc.rect(qx+s*cell,qy+r*cell,(c-s)*cell+.02,cell+.02,"F");}else c++;}}
     const lines=[{...fitLine(H,g.hs,false),c:90},{...fitLine(lab.codigo,g.cs,true),c:0}];
     if(lab.desc){doc.setFont("helvetica","normal");doc.setFontSize(g.ds);let dl=doc.splitTextToSize(lab.desc,g.tw);
       if(dl.length>g.maxD){dl=dl.slice(0,g.maxD);let last=dl[g.maxD-1];while(last.length&&doc.getTextWidth(last+"…")>g.tw)last=last.slice(0,-1);dl[g.maxD-1]=last.trimEnd()+"…";}
       dl.forEach(t=>lines.push({t,s:g.ds,b:false,c:0}));}
     if(lab.sub)lines.push({...fitLine(lab.sub,g.ss,false),c:90});
-    const lh=l=>l.s*.3528*1.3,TH=lines.reduce((a,l)=>a+lh(l),0);let y=p.y+(f.h-TH)/2;
-    for(const l of lines){y+=lh(l);doc.setFont("helvetica",l.b?"bold":"normal");doc.setFontSize(l.s);doc.setTextColor(l.c);doc.text(l.t,p.x+g.tx,y-l.s*.3528*.32);}
+    const lh=l=>l.s*EM,TH=lines.reduce((a,l)=>a+lh(l),0);
+    let y,tx,opt;
+    if(g.v){const top=p.y+g.pad+g.q+g.pad*.6,avail=p.y+f.h-g.pad-top;y=top+Math.max(0,(avail-TH)/2);tx=p.x+f.w/2;opt={align:"center"};}
+    else{y=p.y+(f.h-TH)/2;tx=p.x+g.tx;opt={};}
+    for(const l of lines){y+=lh(l);doc.setFont("helvetica",l.b?"bold":"normal");doc.setFontSize(l.s);doc.setTextColor(l.c);doc.text(l.t,tx,y-l.s*.3528*.32,opt);}
   });
   return {doc,codes:labs.map(l=>l.codigo)};
 }
